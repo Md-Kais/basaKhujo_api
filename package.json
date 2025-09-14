@@ -9,7 +9,7 @@
     "typecheck": "tsc --noEmit",
     "build": "tsc -p tsconfig.json",
     "prestart": "npm run build",             
-    "start": "node dist/server.js",
+    "start": "node dist/src/server.js",
     "postinstall": "npx prisma generate",
     "migrate:deploy": "prisma migrate deploy",
     "prisma:generate": "prisma generate",
