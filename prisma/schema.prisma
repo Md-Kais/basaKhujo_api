@@ -1,0 +1,288 @@
+// prisma/schema.prisma
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL") // use Neon pooled URL with sslmode=require
+  directUrl = env("DIRECT_URL") // (recommended) direct URL for Prisma Migrate
+}
+
+//////////////////////////////////////////////////////
+// Enums
+//////////////////////////////////////////////////////
+
+enum Role {
+  ADMIN
+  LANDLORD
+  TENANT
+}
+
+enum BookingStatus {
+  REQUESTED
+  CONFIRMED
+  CANCELLED
+  COMPLETED
+}
+
+enum PropertyStatus {
+  LISTED
+  PAUSED
+  RENTED
+}
+
+//////////////////////////////////////////////////////
+// Core models
+//////////////////////////////////////////////////////
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  name         String?
+  phone        String?
+  role         Role     @default(TENANT)
+  avatarUrl    String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  // Relations
+  properties         Property[]                @relation("UserProperties") // as landlord (owner of properties)
+  favorites          Favorite[]
+  messages           Message[]                 @relation("UserMessages")
+  conversations      ConversationParticipant[]
+  bookingsAsTenant   Booking[]                 @relation("TenantBookings")
+  bookingsAsLandlord Booking[]                 @relation("LandlordBookings")
+
+  // Reviews
+  landlordReviewsGiven    LandlordReview[] @relation("LandlordReviewBy") // user wrote reviews about landlords
+  landlordReviewsReceived LandlordReview[] @relation("LandlordReviewFor") // user received reviews as a landlord
+  propertyReviews         PropertyReview[] @relation("PropertyReviewBy") // user reviewed properties
+}
+
+//////////////////////////////////////////////////////
+// Bangladesh location hierarchy
+//////////////////////////////////////////////////////
+
+model Division {
+  id        Int        @id
+  name      String
+  bnName    String?
+  url       String?
+  districts District[]
+
+  // Back-relation for properties linked to this division
+  properties Property[] @relation("DivisionProperties")
+}
+
+model District {
+  id         Int     @id
+  divisionId Int
+  name       String
+  bnName     String?
+  lat        Float?
+  lon        Float?
+  url        String?
+
+  division Division  @relation(fields: [divisionId], references: [id])
+  upazilas Upazila[]
+
+  // Back-relation for properties linked to this district
+  properties Property[] @relation("DistrictProperties")
+
+  @@index([divisionId])
+}
+
+model Upazila {
+  id         Int     @id
+  districtId Int
+  name       String
+  bnName     String?
+  url        String?
+
+  district District @relation(fields: [districtId], references: [id])
+
+  // Back-relation for properties linked to this upazila
+  properties Property[] @relation("UpazilaProperties")
+
+  @@index([districtId])
+}
+
+//////////////////////////////////////////////////////
+// Property & related
+//////////////////////////////////////////////////////
+
+model Property {
+  id            String         @id @default(cuid())
+  title         String
+  description   String
+  rentMonthly   Int
+  deposit       Int?
+  type          String? // e.g., apartment, sublet, etc.
+  bedrooms      Int?
+  bathrooms     Int?
+  areaSqft      Int?
+  amenities     String[] // Postgres text[]
+  addressLine   String
+  lat           Float?
+  lon           Float?
+  status        PropertyStatus @default(LISTED)
+  availableFrom DateTime?
+
+  // Location linkage
+  divisionId Int
+  districtId Int
+  upazilaId  Int
+
+  // Ownership
+  landlordId String
+  landlord   User   @relation("UserProperties", fields: [landlordId], references: [id])
+
+  // Images, favorites, bookings, reviews
+  images    PropertyImage[]
+  favorites Favorite[]
+  bookings  Booking[]
+  reviews   PropertyReview[]
+
+  // Timestamps
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Location relations (named on both sides)
+  division Division @relation("DivisionProperties", fields: [divisionId], references: [id])
+  district District @relation("DistrictProperties", fields: [districtId], references: [id])
+  upazila  Upazila  @relation("UpazilaProperties", fields: [upazilaId], references: [id])
+
+  @@index([divisionId, districtId, upazilaId])
+  @@index([status])
+  @@index([rentMonthly])
+}
+
+model PropertyImage {
+  id         String   @id @default(cuid())
+  propertyId String
+  url        String
+  publicId   String
+  isCover    Boolean  @default(false)
+  createdAt  DateTime @default(now())
+
+  property Property @relation(fields: [propertyId], references: [id])
+
+  @@index([propertyId])
+}
+
+model Favorite {
+  userId     String
+  propertyId String
+  createdAt  DateTime @default(now())
+
+  user     User     @relation(fields: [userId], references: [id])
+  property Property @relation(fields: [propertyId], references: [id])
+
+  @@id([userId, propertyId])
+}
+
+//////////////////////////////////////////////////////
+// Messaging
+//////////////////////////////////////////////////////
+
+model Conversation {
+  id            String    @id @default(cuid())
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  lastMessageAt DateTime?
+
+  participants ConversationParticipant[]
+  messages     Message[]
+}
+
+model ConversationParticipant {
+  id             String   @id @default(cuid())
+  conversationId String
+  userId         String
+  joinedAt       DateTime @default(now())
+
+  conversation Conversation @relation(fields: [conversationId], references: [id])
+  user         User         @relation(fields: [userId], references: [id])
+
+  @@unique([conversationId, userId]) // enables where: { conversationId_userId: { ... } }
+  @@index([userId])
+}
+
+model Message {
+  id             String   @id @default(cuid())
+  conversationId String
+  senderId       String
+  content        String
+  createdAt      DateTime @default(now())
+
+  conversation Conversation @relation(fields: [conversationId], references: [id])
+  sender       User         @relation("UserMessages", fields: [senderId], references: [id])
+
+  @@index([conversationId, createdAt])
+}
+
+//////////////////////////////////////////////////////
+// Booking & Reviews
+//////////////////////////////////////////////////////
+
+model Booking {
+  id          String        @id @default(cuid())
+  propertyId  String
+  tenantId    String
+  landlordId  String
+  status      BookingStatus @default(REQUESTED)
+  startDate   DateTime?
+  endDate     DateTime?
+  confirmedAt DateTime?
+  createdAt   DateTime      @default(now())
+
+  property Property @relation(fields: [propertyId], references: [id])
+  tenant   User     @relation("TenantBookings", fields: [tenantId], references: [id])
+  landlord User     @relation("LandlordBookings", fields: [landlordId], references: [id])
+
+  landlordReview LandlordReview?
+  propertyReview PropertyReview?
+
+  @@index([tenantId])
+  @@index([landlordId])
+  @@index([propertyId])
+}
+
+model LandlordReview {
+  id         String   @id @default(cuid())
+  bookingId  String   @unique // exactly one review per booking
+  landlordId String
+  reviewerId String // tenant
+  rating     Int
+  comment    String?
+  createdAt  DateTime @default(now())
+
+  booking Booking @relation(fields: [bookingId], references: [id])
+
+  // two User relations → must be named on both sides
+  landlord User @relation("LandlordReviewFor", fields: [landlordId], references: [id])
+  reviewer User @relation("LandlordReviewBy", fields: [reviewerId], references: [id])
+
+  @@index([landlordId])
+  @@index([reviewerId])
+}
+
+model PropertyReview {
+  id         String   @id @default(cuid())
+  bookingId  String   @unique // exactly one review per booking
+  propertyId String
+  reviewerId String // tenant
+  rating     Int
+  comment    String?
+  createdAt  DateTime @default(now())
+
+  booking  Booking  @relation(fields: [bookingId], references: [id])
+  property Property @relation(fields: [propertyId], references: [id])
+  reviewer User     @relation("PropertyReviewBy", fields: [reviewerId], references: [id])
+
+  @@index([propertyId])
+  @@index([reviewerId])
+}
