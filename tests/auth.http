@@ -1,0 +1,97 @@
+@baseUrl = http://localhost:10000/api
+@password = Passw0rd!
+@role = LANDLORD
+@email = test+{{$guid}}@example.com
+# variables above are plain text; {{$guid}} makes a unique email each run
+
+###
+# 1) Health check (optional)
+GET {{baseUrl}}/health
+
+> {%
+// Basic assertions
+client.assert(response.status === 200, "Health should be 200");
+const b = JSON.parse(response.body);
+client.assert(b.ok === true, "Expected { ok: true }");
+%}
+
+###
+# 2) Register
+POST {{baseUrl}}/auth/register
+Content-Type: application/json
+
+{
+  "email": "{{email}}",
+  "password": "{{password}}",
+  "role": "{{role}}"
+}
+
+> {%
+// Expect 201 and capture email if server echoes it back
+client.assert(response.status === 201, "Register should return 201");
+try {
+  const data = JSON.parse(response.body);
+  if (data?.email) client.global.set("email", data.email);
+} catch {}
+%}
+
+###
+# 3) Login (capture access/refresh)
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "email": "{{email}}",
+  "password": "{{password}}"
+}
+
+> {%
+// Save tokens for later requests
+client.assert(response.status === 200, "Login should return 200");
+const data = JSON.parse(response.body);
+client.assert(!!data.access, "Missing access token");
+client.global.set("accessToken", data.access);
+if (data.refresh) client.global.set("refreshToken", data.refresh);
+%}
+
+###
+# 4) Me (should fail without token)
+GET {{baseUrl}}/auth/me
+
+> {% client.assert(response.status === 401, "Me without token should be 401"); %}
+
+###
+# 5) Me (with Bearer access token)
+GET {{baseUrl}}/auth/me
+Authorization: Bearer {{accessToken}}
+
+> {%
+// Expect user payload
+client.assert(response.status === 200, "Me with token should return 200");
+const me = JSON.parse(response.body);
+client.assert(!!me.email, "Me should include email");
+%}
+
+###
+# 6) Refresh (body-based; if you later switch to HttpOnly cookie, see note below)
+POST {{baseUrl}}/auth/refresh
+Content-Type: application/json
+
+{
+  "refresh": "{{refreshToken}}"
+}
+
+> {%
+// Capture new access token after refresh
+client.assert(response.status === 200, "Refresh should return 200");
+const r = JSON.parse(response.body);
+client.assert(!!r.access, "Refresh response missing access");
+client.global.set("accessToken", r.access);
+%}
+
+###
+# 7) Logout (Bearer token)
+POST {{baseUrl}}/auth/logout
+Authorization: Bearer {{accessToken}}
+
+> {% client.assert(response.status === 200, "Logout should return 200"); %}

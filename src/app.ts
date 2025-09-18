@@ -33,10 +33,11 @@ const corsOrigins = (process.env.CORS_ORIGIN ?? process.env.CLIENT_URL ?? '')
 app.use(cors({ origin: corsOrigins.length ? corsOrigins : true, credentials: true })); // :contentReference[oaicite:4]{index=4}
 
 // --- Liveness & Readiness ---
-app.get('/health', (_req, res) => {
+app.get(['/health','/api/health'], (_req, res) => {
   res.status(200).json({
     status: 'ok',
     uptime: Math.round(process.uptime()),
+     env: process.env.NODE_ENV || 'dev',
     timestamp: new Date().toISOString(),
   });
 });

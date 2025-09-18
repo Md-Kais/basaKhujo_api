@@ -39,23 +39,39 @@ exports.verifyAccess = verifyAccess;
 exports.verifyRefresh = verifyRefresh;
 const jwt = __importStar(require("jsonwebtoken"));
 const config_1 = require("../config");
-// Normalize secrets so they’re never undefined
+// ---- Secrets & expirations (as you had) ----
 const ACCESS_SECRET = config_1.config.jwt.accessSecret;
 const REFRESH_SECRET = config_1.config.jwt.refreshSecret;
-// Normalize expires to the exact type accepted by jsonwebtoken@9
 const ACCESS_EXPIRES = config_1.config.jwt.accessExpiresIn;
 const REFRESH_EXPIRES = config_1.config.jwt.refreshExpiresIn;
+// ---- User-defined type guard to narrow jsonwebtoken's union return ----
+function isAccessPayload(p) {
+    return typeof p !== 'string'
+        && typeof p.id === 'string'
+        && typeof p.role === 'string';
+}
+// ---- Sign helpers (compatible with your current call sites) ----
+// Tip: only sign the fields you actually need in the token.
 function signAccess(payload) {
+    const { id, role } = payload;
     const options = { expiresIn: ACCESS_EXPIRES };
-    return jwt.sign(payload, ACCESS_SECRET, options);
+    return jwt.sign({ id, role }, ACCESS_SECRET, options);
 }
 function signRefresh(payload) {
+    const { id, role } = payload;
     const options = { expiresIn: REFRESH_EXPIRES };
-    return jwt.sign(payload, REFRESH_SECRET, options);
+    return jwt.sign({ id, role }, REFRESH_SECRET, options);
 }
+// ---- Verify helpers now return a strongly-typed payload ----
 function verifyAccess(token) {
-    return jwt.verify(token, ACCESS_SECRET);
+    const decoded = jwt.verify(token, ACCESS_SECRET); // string | JwtPayload
+    if (!isAccessPayload(decoded))
+        throw new Error('Invalid access token payload');
+    return decoded;
 }
 function verifyRefresh(token) {
-    return jwt.verify(token, REFRESH_SECRET);
+    const decoded = jwt.verify(token, REFRESH_SECRET); // string | JwtPayload
+    if (!isAccessPayload(decoded))
+        throw new Error('Invalid refresh token payload');
+    return decoded;
 }
