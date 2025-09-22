@@ -12,6 +12,12 @@ app.use(cors({
   credentials: true,                 // allow cookies
 }));
 app.use(express.json());
+app.use((req, _res, next) => {
+  if (req.path.length > 1 && req.path.endsWith('/')) {
+    req.url = req.url.replace(/\/+(\?|$)/, '$1');
+  }
+  next();
+});
 
 app.get('/', (_req, res) => res.status(200).send('BasaKhujo API is running'));
 app.get('/health', (_req, res) =>
@@ -24,8 +30,9 @@ app.get('/health', (_req, res) =>
 
 // your real APIs
 app.use('/api/auth', authRoutes);
+app.use('/api/locations', locationRoutes);
 app.use('/api/properties', propertyRoutes); // etc.
-app.use('api/locations',locationRoutes);
+
 // 404 and error handlers go LAST
 app.use(notFound);
 app.use(errorHandler);
