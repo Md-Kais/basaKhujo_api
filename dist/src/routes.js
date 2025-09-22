@@ -14,8 +14,10 @@ const favorite_routes_1 = __importDefault(require("./modules/favorite/favorite.r
 const message_routes_1 = __importDefault(require("./modules/message/message.routes"));
 const router = (0, express_1.Router)();
 router.use('/auth', auth_routes_1.default);
+// keep property routes on /properties
 router.use('/properties', property_routes_1.default);
-router.use('/properties', image_routes_1.default);
+// move image routes under a subpath to avoid conflicts
+router.use('/properties/images', image_routes_1.default);
 router.use('/locations', location_routes_1.default);
 router.use('/bookings', booking_routes_1.default);
 router.use('/reviews', review_routes_1.default);

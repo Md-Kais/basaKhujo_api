@@ -15,9 +15,11 @@ const rateLimiter_1 = require("./middlewares/rateLimiter");
 const error_1 = require("./middlewares/error");
 const prisma_1 = require("./db/prisma");
 const redis_1 = require("./db/redis");
+const routes_2 = __importDefault(require("./routes"));
 const app = (0, express_1.default)();
 // If you run behind a proxy (Render/Koyeb/etc.) and use rate limit / secure cookies:
 app.set('trust proxy', 1);
+['/api', '/api/v1'].forEach(p => app.use(p, routes_2.default));
 // --- Core middleware (order matters) ---
 app.use((0, helmet_1.default)()); // security headers first. :contentReference[oaicite:1]{index=1}
 app.use((0, morgan_1.default)(process.env.NODE_ENV === 'production' ? 'combined' : 'dev'));

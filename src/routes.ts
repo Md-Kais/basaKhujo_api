@@ -12,8 +12,13 @@ import messageRoutes from './modules/message/message.routes';
 const router = Router();
 
 router.use('/auth', authRoutes);
+
+// keep property routes on /properties
 router.use('/properties', propertyRoutes);
-router.use('/properties', imageRoutes);
+
+// move image routes under a subpath to avoid conflicts
+router.use('/properties/images', imageRoutes);
+
 router.use('/locations', locationRoutes);
 router.use('/bookings', bookingRoutes);
 router.use('/reviews', reviewRoutes);

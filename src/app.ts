@@ -11,12 +11,13 @@ import { rateLimiter } from './middlewares/rateLimiter';
 import { notFound, errorHandler } from './middlewares/error';
 import { prisma } from './db/prisma';
 import { redis } from './db/redis';
+import routes from './routes';
 
 const app = express();
 
 // If you run behind a proxy (Render/Koyeb/etc.) and use rate limit / secure cookies:
 app.set('trust proxy', 1);
-
+['/api', '/api/v1'].forEach(p => app.use(p, routes));
 // --- Core middleware (order matters) ---
 app.use(helmet()); // security headers first. :contentReference[oaicite:1]{index=1}
 app.use(morgan(process.env.NODE_ENV === 'production' ? 'combined' : 'dev'));
