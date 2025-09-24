@@ -1,3 +1,4 @@
+// src/modules/booking/booking.router.ts
 import { Router } from 'express';
 import { z } from 'zod';
 import { Prisma } from '@prisma/client';
@@ -203,7 +204,9 @@ router.get(
   validate({ query: listQuery }),
   async (req: any, res) => {
     const userId = req.user.id as string;
-    const { as, page, limit } = req.query as z.infer<typeof listQuery>;
+
+    // IMPORTANT: query was validated into res.locals.query by validate()
+    const { as, page, limit } = (res.locals.query as z.infer<typeof listQuery>);
 
     const where =
       as === 'tenant' ? { tenantId: userId } :

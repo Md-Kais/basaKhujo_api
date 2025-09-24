@@ -26,6 +26,8 @@ app.use(compression());     // gzip responses. :contentReference[oaicite:3]{inde
 app.use(express.json({ limit: '2mb' }));
 app.use(cookieParser());
 
+
+
 // CORS (allow multiple origins via comma-separated env)
 const corsOrigins = (process.env.CORS_ORIGIN ?? process.env.CLIENT_URL ?? '')
   .split(',')

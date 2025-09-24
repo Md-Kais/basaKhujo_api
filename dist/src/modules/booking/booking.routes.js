@@ -1,5 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
+// src/modules/booking/booking.router.ts
 const express_1 = require("express");
 const zod_1 = require("zod");
 const prisma_1 = require("../../db/prisma");
@@ -161,7 +162,8 @@ router.patch('/:id/complete', auth_1.requireAuth, (0, auth_1.requireRole)('LANDL
 /** GET /api/bookings  -> my bookings (as tenant or landlord) */
 router.get('/', auth_1.requireAuth, (0, validate_1.validate)({ query: listQuery }), async (req, res) => {
     const userId = req.user.id;
-    const { as, page, limit } = req.query;
+    // IMPORTANT: query was validated into res.locals.query by validate()
+    const { as, page, limit } = res.locals.query;
     const where = as === 'tenant' ? { tenantId: userId } :
         as === 'landlord' ? { landlordId: userId } :
             { OR: [{ tenantId: userId }, { landlordId: userId }] };
