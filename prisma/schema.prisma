@@ -140,6 +140,10 @@ model Property {
   landlordId String
   landlord   User   @relation("UserProperties", fields: [landlordId], references: [id])
 
+  //New Column (multiple URLs stored as text array)
+
+  imageUrls String[] @db.Text
+
   // Images, favorites, bookings, reviews
   images    PropertyImage[]
   favorites Favorite[]
