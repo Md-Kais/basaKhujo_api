@@ -11,6 +11,27 @@ const router = (0, express_1.Router)();
    Schemas
 ========================= */
 const idParam = zod_1.z.object({ id: zod_1.z.string().min(1) });
+// status filter: single or array, optional
+const statusEnum = zod_1.z.enum(['REQUESTED', 'CONFIRMED', 'CANCELLED', 'COMPLETED']);
+const statusFilter = zod_1.z.union([statusEnum, zod_1.z.array(statusEnum)]).optional();
+// optional date range (by createdAt)
+const dateRange = zod_1.z.object({
+    from: zod_1.z.coerce.date().optional(),
+    to: zod_1.z.coerce.date().optional(),
+}).refine(d => !d.from || !d.to || d.from <= d.to, {
+    message: 'from must be before to', path: ['to']
+});
+// landlord requests list query
+const landlordListQuery = zod_1.z.object({
+    status: statusFilter, // default = REQUESTED (we’ll handle in handler)
+    page: zod_1.z.coerce.number().int().min(1).default(1),
+    limit: zod_1.z.coerce.number().int().min(1).max(100).default(12),
+}).merge(dateRange);
+// Common query for landlord lists
+const landlordPagedQuery = zod_1.z.object({
+    page: zod_1.z.coerce.number().int().min(1).default(1),
+    limit: zod_1.z.coerce.number().int().min(1).max(100).default(12),
+}).merge(dateRange);
 const createBookingSchema = zod_1.z.object({
     propertyId: zod_1.z.string().min(1),
     startDate: zod_1.z.coerce.date().optional(), // allow open-ended
@@ -22,9 +43,10 @@ const createBookingSchema = zod_1.z.object({
 }, { message: 'startDate must be before endDate', path: ['endDate'] });
 const listQuery = zod_1.z.object({
     as: zod_1.z.enum(['tenant', 'landlord']).optional(),
+    status: statusFilter, // NEW
     page: zod_1.z.coerce.number().int().positive().default(1),
-    limit: zod_1.z.coerce.number().int().positive().max(100).default(12)
-});
+    limit: zod_1.z.coerce.number().int().positive().max(100).default(12),
+}).merge(dateRange);
 const confirmBody = zod_1.z.object({
     // optionally set/override start/end at confirmation time
     startDate: zod_1.z.coerce.date().optional(),
@@ -52,6 +74,40 @@ async function hasDateConflict(propertyId, start, end) {
         select: { id: true },
     });
     return Boolean(conflict);
+}
+function toStatusArray(input) {
+    if (!input)
+        return undefined;
+    return Array.isArray(input) ? input : [input];
+}
+function toDateWhere(d) {
+    const createdAt = {};
+    if (d.from)
+        createdAt.gte = d.from;
+    if (d.to)
+        createdAt.lte = d.to;
+    return (d.from || d.to) ? { createdAt } : {};
+}
+async function listForLandlordByStatus(landlordId, status, page, limit, dr) {
+    const where = {
+        landlordId,
+        status,
+        ...toDateWhere(dr),
+    };
+    const [items, total] = await Promise.all([
+        prisma_1.prisma.booking.findMany({
+            where,
+            orderBy: { createdAt: 'desc' },
+            skip: (page - 1) * limit,
+            take: limit,
+            include: {
+                tenant: { select: { id: true, name: true, email: true } },
+                property: { select: { id: true, title: true, images: true } },
+            },
+        }),
+        prisma_1.prisma.booking.count({ where }),
+    ]);
+    return { items, total, page, limit, status };
 }
 /* =========================
    Routes
@@ -190,5 +246,76 @@ router.get('/:id', auth_1.requireAuth, (0, validate_1.validate)({ params: idPara
     if (!booking)
         return res.status(404).json({ message: 'Not found' });
     res.json(booking);
+});
+/** GET /api/bookings/landlord/stats  -> counts of my bookings by status */
+router.get('/landlord/stats', auth_1.requireAuth, (0, validate_1.validate)({ query: dateRange }), async (req, res) => {
+    const meId = req.user.id;
+    const dr = (res.locals.query ?? {});
+    // groupBy landlord's bookings by status
+    const grouped = await prisma_1.prisma.booking.groupBy({
+        by: ['status'],
+        where: {
+            landlordId: meId,
+            ...toDateWhere(dr)
+        },
+        _count: { _all: true }
+    });
+    // normalize to full shape
+    const stats = {
+        REQUESTED: 0, CONFIRMED: 0, CANCELLED: 0, COMPLETED: 0,
+        total: 0
+    };
+    for (const g of grouped) {
+        stats[g.status] = g._count._all;
+        stats.total += g._count._all;
+    }
+    res.json(stats);
+});
+/** GET /api/bookings/landlord/requests  -> list my bookings by status (default REQUESTED) */
+router.get('/landlord/requests', auth_1.requireAuth, (0, validate_1.validate)({ query: landlordListQuery }), async (req, res) => {
+    const meId = req.user.id;
+    const { status, page, limit, from, to } = res.locals.query;
+    // default to REQUESTED if not provided
+    const statuses = toStatusArray(status) ?? ['REQUESTED'];
+    const baseWhere = {
+        landlordId: meId,
+        status: { in: statuses }, // filter enum(s)
+        ...toDateWhere({ from, to }),
+    };
+    const [items, total] = await Promise.all([
+        prisma_1.prisma.booking.findMany({
+            where: baseWhere,
+            orderBy: { createdAt: 'desc' },
+            skip: (page - 1) * limit, // offset pagination
+            take: limit,
+            include: {
+                tenant: { select: { id: true, name: true, email: true } },
+                property: { select: { id: true, title: true, images: true } }
+            }
+        }),
+        prisma_1.prisma.booking.count({ where: baseWhere })
+    ]);
+    res.json({ items, total, page, limit, statuses });
+});
+/** GET /api/bookings/landlord/confirmed */
+router.get('/landlord/confirmed', auth_1.requireAuth, (0, validate_1.validate)({ query: landlordPagedQuery }), async (req, res) => {
+    const meId = req.user.id;
+    const { page, limit, from, to } = res.locals.query;
+    const data = await listForLandlordByStatus(meId, 'CONFIRMED', page, limit, { from, to });
+    res.json(data);
+});
+/** GET /api/bookings/landlord/cancelled */
+router.get('/landlord/cancelled', auth_1.requireAuth, (0, validate_1.validate)({ query: landlordPagedQuery }), async (req, res) => {
+    const meId = req.user.id;
+    const { page, limit, from, to } = res.locals.query;
+    const data = await listForLandlordByStatus(meId, 'CANCELLED', page, limit, { from, to });
+    res.json(data);
+});
+/** GET /api/bookings/landlord/completed */
+router.get('/landlord/completed', auth_1.requireAuth, (0, validate_1.validate)({ query: landlordPagedQuery }), async (req, res) => {
+    const meId = req.user.id;
+    const { page, limit, from, to } = res.locals.query;
+    const data = await listForLandlordByStatus(meId, 'COMPLETED', page, limit, { from, to });
+    res.json(data);
 });
 exports.default = router;
