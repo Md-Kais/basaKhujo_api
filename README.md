@@ -33,7 +33,7 @@ npm i
 Create a `.env` in the project root:
 
 ```env
-# PostgreSQL (example uses Neon-style URL)
+# PostgreSQL 
 DATABASE_URL="postgresql://USER:PASSWORD@HOST:5432/DBNAME?sslmode=require"
 DIRECT_URL="postgresql://USER:PASSWORD@HOST:5432/DBNAME?sslmode=require(non-pooled)"
 
