@@ -4,6 +4,12 @@ A TypeScript/Express + Prisma + PostgreSQL backend for the BasaKhujo home‑rent
 
 ---
 
+**Docs & links**
+
+* 📄 **Project Report (PDF):** [Report.pdf](https://github.com/Md-Kais/basaKhujo_api/blob/main/CSE616_ProjectReport_TeamNo28.pdf)
+* 🖥️ Frontend (BasaKhujo): [https://github.com/mdsoponabdullah/BasaKhojo/tree/main/basakhojo](https://github.com/mdsoponabdullah/BasaKhojo/tree/main/basakhojo)
+
+
 ## Tech stack
 
 * **Runtime:** Node.js (LTS) + TypeScript
