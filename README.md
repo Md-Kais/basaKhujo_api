@@ -35,13 +35,20 @@ Create a `.env` in the project root:
 ```env
 # PostgreSQL (example uses Neon-style URL)
 DATABASE_URL="postgresql://USER:PASSWORD@HOST:5432/DBNAME?sslmode=require"
+DIRECT_URL="postgresql://USER:PASSWORD@HOST:5432/DBNAME?sslmode=require(non-pooled)"
 
 # App
 NODE_ENV=development
 PORT=10000
 
 # JWT
-JWT_SECRET=change-me
+JWT_ACCESS_SECRET=""
+JWT_REFRESH_SECRET=""
+JWT_ACCESS_EXPIRES_IN="15m"
+JWT_REFRESH_EXPIRES_IN="7d"
+
+# REDIS
+REDIS_URL=""
 ```
 
 ### 3) Prisma: format, validate, migrate
