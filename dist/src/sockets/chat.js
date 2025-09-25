@@ -1,43 +1,73 @@
 "use strict";
-var __importDefault = (this && this.__importDefault) || function (mod) {
-    return (mod && mod.__esModule) ? mod : { "default": mod };
-};
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.initChat = initChat;
+// src/sockets/chat.ts
 const socket_io_1 = require("socket.io");
-const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
 const prisma_1 = require("../db/prisma");
+const jwt_1 = require("../utils/jwt"); // ✅ reuse REST JWT logic
+const zod_1 = require("zod");
 function initChat(httpServer) {
-    const io = new socket_io_1.Server(httpServer, { path: '/socket.io', cors: { origin: process.env.CLIENT_URL } });
+    const io = new socket_io_1.Server(httpServer, {
+        path: '/socket.io',
+        cors: {
+            origin: process.env.CLIENT_URL?.split(',') ?? '*',
+            credentials: true
+        }
+    });
     const chat = io.of('/chat');
+    // 🔐 Auth middleware per connection (runs once per connection)
     chat.use((socket, next) => {
-        const token = socket.handshake.auth?.token || socket.handshake.headers.authorization?.toString().replace('Bearer ', '');
         try {
-            const user = jsonwebtoken_1.default.verify(token, process.env.JWT_ACCESS_SECRET);
-            socket.user = user;
+            const bearer = socket.handshake.auth?.token
+                || socket.handshake.headers.authorization?.toString().replace(/^Bearer\s+/i, '');
+            if (!bearer)
+                return next(new Error('Unauthorized'));
+            const user = (0, jwt_1.verifyAccess)(bearer); // { id, role, iat, exp }
+            socket.data.user = { id: user.id, role: user.role };
             return next();
         }
         catch {
             return next(new Error('Unauthorized'));
         }
     });
+    // Zod schemas for events
+    const joinSchema = zod_1.z.object({ conversationId: zod_1.z.string().min(1) });
+    const sendSchema = zod_1.z.object({ conversationId: zod_1.z.string().min(1), content: zod_1.z.string().min(1).max(4000) });
+    // (Optional) very small anti-spam limiter
+    const lastSentAt = {}; // socket.id -> ts
+    const MIN_GAP_MS = 250; // ~4 msgs/sec
     chat.on('connection', (socket) => {
-        const user = socket.user;
-        socket.on('join-conversation', async (conversationId) => {
+        const me = socket.data.user;
+        socket.on('join-conversation', async (payload) => {
+            const { conversationId } = joinSchema.parse({ conversationId: payload?.conversationId ?? payload });
             const member = await prisma_1.prisma.conversationParticipant.findUnique({
-                where: { conversationId_userId: { conversationId, userId: user.id } }
+                where: { conversationId_userId: { conversationId, userId: me.id } }
             });
             if (!member)
-                return;
-            socket.join(conversationId);
+                return; // silently ignore
+            socket.join(conversationId); // ✅ room join (emit to this room later)
         });
-        socket.on('send-message', async ({ conversationId, content }) => {
-            // optional: encrypt content here before saving
+        socket.on('send-message', async (payload) => {
+            // basic rate limit
+            const now = Date.now();
+            if (lastSentAt[socket.id] && now - lastSentAt[socket.id] < MIN_GAP_MS)
+                return;
+            lastSentAt[socket.id] = now;
+            const { conversationId, content } = sendSchema.parse(payload);
+            // authorize membership for this conversation
+            const member = await prisma_1.prisma.conversationParticipant.findUnique({
+                where: { conversationId_userId: { conversationId, userId: me.id } }
+            });
+            if (!member)
+                return; // ignore if not a member
             const msg = await prisma_1.prisma.message.create({
-                data: { conversationId, senderId: user.id, content }
+                data: { conversationId, senderId: me.id, content }
             });
             await prisma_1.prisma.conversation.update({ where: { id: conversationId }, data: { lastMessageAt: new Date() } });
+            // ✅ broadcast only to the room (both parties)
             chat.to(conversationId).emit('new-message', msg);
+            // Optional: also emit a conversation bump for lists
+            chat.to(conversationId).emit('conversation-updated', { id: conversationId, lastMessageAt: new Date().toISOString() });
         });
     });
     return io;
