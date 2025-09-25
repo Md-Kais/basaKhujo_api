@@ -6,8 +6,8 @@ generator client {
 
 datasource db {
   provider  = "postgresql"
-  url       = env("DATABASE_URL") // use Neon pooled URL with sslmode=require
-  directUrl = env("DIRECT_URL") // (recommended) direct URL for Prisma Migrate
+  url       = env("DATABASE_URL") 
+  directUrl = env("DIRECT_URL") //nonpooled
 }
 
 //////////////////////////////////////////////////////
