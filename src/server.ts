@@ -6,6 +6,9 @@ import propertyRoutes from './modules/property/property.routes';
 import authRoutes from './modules/auth/auth.routes';
 import locationRoutes from './modules/location/location.routes';
 import bookingRoutes from './modules/booking/booking.routes';
+import favoriteRoutes from './modules/favorite/favorite.routes';
+import messageRoutes from './modules/message/message.routes';
+import reviewRoutes from './modules/review/review.routes';
 
 const app = express();
 app.use(cors({
@@ -34,6 +37,9 @@ app.use('/api/auth', auth);
 app.use('/api/locations', locationRoutes);
 app.use('/api/properties', propertyRoutes); // etc.
 app.use('/api/bookings', bookingRoutes);
+app.use('/api/favorites', favoriteRoutes);
+app.use('/api/messages', messageRoutes);
+app.use('/api/reviews', reviewRoutes);
 
 // 404 and error handlers go LAST
 app.use(notFound);

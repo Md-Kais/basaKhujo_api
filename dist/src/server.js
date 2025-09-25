@@ -10,6 +10,9 @@ const error_1 = require("./middlewares/error");
 const property_routes_1 = __importDefault(require("./modules/property/property.routes"));
 const location_routes_1 = __importDefault(require("./modules/location/location.routes"));
 const booking_routes_1 = __importDefault(require("./modules/booking/booking.routes"));
+const favorite_routes_1 = __importDefault(require("./modules/favorite/favorite.routes"));
+const message_routes_1 = __importDefault(require("./modules/message/message.routes"));
+const review_routes_1 = __importDefault(require("./modules/review/review.routes"));
 const app = (0, express_1.default)();
 app.use((0, cors_1.default)({
     origin: ['http://localhost:3000'],
@@ -33,6 +36,9 @@ app.use('/api/auth', auth_routes_1.default);
 app.use('/api/locations', location_routes_1.default);
 app.use('/api/properties', property_routes_1.default); // etc.
 app.use('/api/bookings', booking_routes_1.default);
+app.use('/api/favorites', favorite_routes_1.default);
+app.use('/api/messages', message_routes_1.default);
+app.use('/api/reviews', review_routes_1.default);
 // 404 and error handlers go LAST
 app.use(error_1.notFound);
 app.use(error_1.errorHandler);
