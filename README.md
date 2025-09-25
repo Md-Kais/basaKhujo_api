@@ -371,6 +371,7 @@ model Property {
 
   * `GET /api/bookings/landlord/stats`
   * `GET /api/bookings/landlord/stats?from=YYYY-MM-DD&to=YYYY-MM-DD`
+  * `GET /api/bookings/landlord/requests?page=1&limit=12`
   * `GET /api/bookings/landlord/confirmed?page=1&limit=12`
   * `GET /api/bookings/landlord/confirmed?from=YYYY-MM-DD&to=YYYY-MM-DD&page=1&limit=12`
   * `GET /api/bookings/landlord/cancelled?page=1&limit=12`
